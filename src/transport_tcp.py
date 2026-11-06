@@ -62,8 +62,8 @@ def send_all(conn, data):
     conn.sendall(data)
 
 
-# Note to self: make sure Lanis doesn't accept a packet over 16MiB,... you never know.
-# Maybe come back and allocate based on packets being recieved if time is available
+# Note to self: make sure Lanis doesn't accept a message over 16MiB,... you never know.
+# Maybe come back and allocate based on messages being received if time is available
 def recv_exact(conn, n):
     """Return exactly n bytes. Raise ConnectionClosed(clean=...) if the stream ends."""
     if n < 0:
@@ -83,4 +83,22 @@ def close(conn):
     """Close the session gracefully: shut down your sending side, read and
     discard whatever is still arriving until end-of-stream (or about a second
     passes), then close. Specification, Section 8.2 explains why."""
-    raise NotImplementedError
+    try:
+        conn.shutdown(socket.SHUT_WR)
+    except OSError:
+        pass
+    deadline = time.monotonic() + 1.0
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            conn.settimeout(remaining)
+            try:
+                chunk = conn.recv(4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+    finally:
+        conn.close()
