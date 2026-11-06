@@ -36,6 +36,10 @@ def encode(mtype, payload=b"", status=0):
     header = HEADER.pack(VERSION, mtype, status, 0, len(payload))
     return header + payload
 
+
+# TODO: Review response validation. The client must reject 
+# unexpected response types before reading their payloads, as required by the 
+# protocol specs
 def read_message(conn, transport):
     """Read one complete message from `conn` using only transport.recv_exact.
 
@@ -46,8 +50,15 @@ def read_message(conn, transport):
 
     header_bytes = transport.recv_exact(conn, HEADER_SIZE)
     version, mtype, status, reserved, length = HEADER.unpack(header_bytes)
+    
+    
+    # TODO: Coordinate protocol errors with Tyler's server. The server 
+    # must translate BAD_VERSION and TOO_LARGE into ETP ERROR responses
     if version != VERSION:
         raise ValueError(BAD_VERSION)
+
+    # Note to Tyler: The 16 MiB limit is enforced here.
+    # I appreciate the concern for my ability to count bytes. <3
     if length > MAX_LEN:
         raise ValueError(TOO_LARGE)
     
