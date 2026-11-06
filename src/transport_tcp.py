@@ -48,17 +48,18 @@ def listen(bind_addr, port):
 
 def accept(listener):
     """Wait for the next session; return (conn, peer_address)."""
-    raise NotImplementedError
+    conn, peer = listener.accept()
+    return conn, peer
 
 
 def connect(host, port):
     """Open a session to host:port; return conn."""
-    raise NotImplementedError
+    return socket.create_connection((host, port))
 
 
 def send_all(conn, data):
     """Send every byte of `data`, or raise an exception."""
-    raise NotImplementedError
+    conn.sendall(data)
 
 
 def recv_exact(conn, n):
