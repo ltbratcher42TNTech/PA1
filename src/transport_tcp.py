@@ -62,9 +62,21 @@ def send_all(conn, data):
     conn.sendall(data)
 
 
+# Note to self: make sure Lanis doesn't accept a packet over 16MiB,... you never know.
+# Maybe come back and allocate based on packets being recieved if time is available
 def recv_exact(conn, n):
     """Return exactly n bytes. Raise ConnectionClosed(clean=...) if the stream ends."""
-    raise NotImplementedError
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    buf = bytearray(n)
+    view = memoryview(buf)
+    got = 0
+    while got < n:
+        k = conn.recv_into(view[got:], n - got)
+        if k == 0:
+            raise ConnectionClosed(clean=(got == 0))
+        got += k
+    return bytes(buf)
 
 
 def close(conn):
