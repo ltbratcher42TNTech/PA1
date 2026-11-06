@@ -1,0 +1,5 @@
+# Keep LF endings so ./etp-server and ./etp-client run on Linux even when
+# files are edited on Windows (a CRLF after #!/bin/sh breaks the launcher).
+* text=auto eol=lf
+*.pcap binary
+*.pcapng binary
