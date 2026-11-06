@@ -133,7 +133,6 @@ DESIGN.md should be 1–2 pages, specific, and true of our code. Give *reasons* 
 ## 5. AI rules for this team
 
 - **AI does not write our code.** This covers `transport_tcp.py`, `encode`, `read_message`, the server session and concurrency, and the client session. We write it, and AI may *review* it afterwards.
-- Small help with code is acceptable *only if it is logged in detail*: what we asked, what we used, what we changed, and how we checked it.
 - AI is fine for explaining the spec, sockets, error messages, Wireshark and tshark syntax; for reviewing our code; for suggesting test cases; for make/git/shell; and for editing our prose.
 - **AI must not produce Q1–Q5 answers or etp-facts values, or read our capture for us.** That includes writing a script that pulls the values out. Reading the capture is our job.
 - **Log as you go**, not at the end. Every substantive interaction gets a row in `AI_USE.md` §3. Fill in §5 ("one thing the AI got wrong, or how you checked") with a real example.
