@@ -7,7 +7,7 @@
 PY       ?= python3
 PORT     ?= 5000
 ROOT     ?= server-files
-SELFCHECK ?= $(HOME)/csc4200-course/project/etp_selfcheck.py
+SELFCHECK ?= tests/etp_selfcheck.py
 
 .PHONY: build run-server check clean
 
