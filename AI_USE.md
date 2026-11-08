@@ -8,7 +8,7 @@ answer only if it is true._
 ## 1. Did you use generative AI on this assignment?
 
 - [ ] No. I did not use any generative AI tool for any part of PA1.
-- [ ] Yes, as described below.
+- [x] Yes, as described below.
 
 ## 2. Statement (the syllabus form)
 
@@ -30,13 +30,8 @@ whole conversations, but keep them in case you are asked._
 
 ## 4. Where AI-produced material remains
 
-_List each file and function (or document section) that still contains code or
-text an AI tool generated, even after you edited it. If none, say none._
+src/client.py, run(args): AI provided a simplified example for the EOF check, including exception handling and behavior. This logic remains in my modified implementation.
 
 ## 5. One thing the AI got wrong — or how you checked it
 
-_Describe one answer, suggestion or piece of code that was wrong, misleading or
-did not fit the specification, and how you caught it. If you found nothing wrong,
-say so and describe how you checked (a test you ran, the part of the
-specification you compared it with). If you did not use AI, describe one thing
-you got wrong yourself and how you caught it._
+Chat initially gave too general advice about handling connection closure without knowing the actual transport implementation. After reviewing Tyler's transport_tcp.py, I confirmed that the close() function ALREADY handled graceful shutdown and adjusted my approach to use that instead. 

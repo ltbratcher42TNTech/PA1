@@ -33,9 +33,51 @@ def run(args):
     `list` prints the LIST_OK payload exactly, `put` prints the 64-hex-digit
     digest, and every diagnostic goes to standard error.
     """
-    raise NotImplementedError
+    conn = transport.connect(args.host, args.port)
 
+    try:
+        hello_msg = etp.encode(etp.HELLO, payload=args.name.encode("ascii"))
 
+        # Sending my masterpiece into the void. Tyler, please respond.
+        transport.send_all(conn, hello_msg)
+
+        version, mtype, status, length, payload = etp.read_message(conn, transport)
+
+        # Trust, but verify.... esp when Tyler wrote the server
+        if mtype == etp.ERROR:
+            return EXIT_SERVER_ERROR
+
+        if mtype != etp.HELLO_OK:
+            return EXIT_FAILURE
+
+        if args.command == "list":
+            list_msg = etp.encode(etp.LIST)
+            transport.send_all(conn, list_msg)
+            version, mtype, status, length, payload = etp.read_message(conn, transport)
+            if mtype == etp.ERROR:
+                return EXIT_SERVER_ERROR
+            if mtype != etp.LIST_OK:
+                return EXIT_FAILURE
+            
+            sys.stdout.buffer.write(payload)
+
+        bye_msg = etp.encode(etp.BYE)
+        transport.send_all(conn, bye_msg)
+        version, mtype, status, length, payload = etp.read_message(conn, transport)
+        if mtype == etp.ERROR:
+            return EXIT_SERVER_ERROR
+        if mtype != etp.BYE_OK:
+            return EXIT_FAILURE
+        try:
+            transport.recv_exact(conn, 1)
+            return EXIT_FAILURE
+        except transport.ConnectionClosed as exc:
+            if not exc.clean:
+                return EXIT_FAILURE
+        return EXIT_OK
+    finally:
+        transport.close(conn)
+    
 def main():
     ap = argparse.ArgumentParser(description="ETP/1 client")
     ap.add_argument("--host", required=True)
