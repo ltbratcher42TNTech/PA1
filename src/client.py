@@ -17,7 +17,8 @@ PA1 brief.
 import argparse
 import sys
 import traceback
-
+import os
+import tempfile
 import etp
 import transport                     # the seam: see src/transport.py
 
@@ -34,16 +35,19 @@ def run(args):
     digest, and every diagnostic goes to standard error.
     """
     conn = transport.connect(args.host, args.port)
+    temp_path = None
+    list_payload = None
+    server_error = False
 
     try:
         hello_msg = etp.encode(etp.HELLO, payload=args.name.encode("ascii"))
 
-        # Sending my masterpiece into the void. Tyler, please respond.
+        # sending my masterpiece into the void. Tyler, please respond.
         transport.send_all(conn, hello_msg)
 
         version, mtype, status, length, payload = etp.read_message(conn, transport)
 
-        # Trust, but verify.... esp when Tyler wrote the server
+        # trust, but verify.... esp when Tyler wrote the server
         if mtype == etp.ERROR:
             return EXIT_SERVER_ERROR
 
@@ -55,11 +59,56 @@ def run(args):
             transport.send_all(conn, list_msg)
             version, mtype, status, length, payload = etp.read_message(conn, transport)
             if mtype == etp.ERROR:
-                return EXIT_SERVER_ERROR
-            if mtype != etp.LIST_OK:
+                server_error = True
+                print(f"Server error {status}: {payload.decode('utf-8', errors='replace')}", file=sys.stderr)
+            elif mtype != etp.LIST_OK:
                 return EXIT_FAILURE
+            else:
+                list_payload = payload
             
-            sys.stdout.buffer.write(payload)
+            list_payload = payload
+
+        elif args.command == "get":
+            # convert to bytes
+            remote_bytes = args.remote.encode("utf-8")
+            get_msg = etp.encode(etp.GET, payload=remote_bytes)
+            transport.send_all(conn, get_msg)
+            version, mtype, status, length, payload = etp.read_message(conn, transport)
+
+            if mtype == etp.ERROR:
+                server_error = True
+                print(f"Server error {status}: {payload.decode('utf-8', errors='replace')}", file=sys.stderr)
+            elif mtype != etp.GET_OK:
+                return EXIT_FAILURE
+            else:
+                with tempfile.NamedTemporaryFile(
+                    mode="wb",
+                    dir=os.path.dirname(os.path.abspath(args.local)),
+                    delete=False
+                ) as temp_file:
+                    temp_path = temp_file.name
+                    temp_file.write(payload)
+
+        elif args.command == "put":
+            return EXIT_FAILURE
+            # TODO: Open args.local in binary mode and read its contents.
+
+            # TODO: Validate args.remote against ETP naming rules.
+
+            # TODO: Check file size against the protocol's limits.
+
+            # TODO: Build the PUT payload according to the specification.
+
+            # TODO: Encode and send the PUT request.
+
+            # TODO: Read the server's response.
+
+            # TODO: Handle ERROR and unexpected response types.
+
+            # TODO: Validate the PUT_OK response and its digest.
+
+            # TODO: Print the required 64-character hexadecimal digest
+            # to stdout after successful PUT.
 
         bye_msg = etp.encode(etp.BYE)
         transport.send_all(conn, bye_msg)
@@ -74,9 +123,25 @@ def run(args):
         except transport.ConnectionClosed as exc:
             if not exc.clean:
                 return EXIT_FAILURE
+        except ConnectionResetError:
+            pass
+        if temp_path is not None:
+            os.replace(temp_path, args.local)
+            temp_path = None
+        if list_payload is not None:
+            sys.stdout.buffer.write(list_payload)
+        if server_error:
+            return EXIT_SERVER_ERROR
         return EXIT_OK
     finally:
-        transport.close(conn)
+        try:
+            transport.close(conn)
+        finally:
+            if temp_path is not None:
+                try:
+                    os.unlink(temp_path)
+                except FileNotFoundError:
+                    pass
     
 def main():
     ap = argparse.ArgumentParser(description="ETP/1 client")

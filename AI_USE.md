@@ -30,7 +30,7 @@ whole conversations, but keep them in case you are asked._
 
 ## 4. Where AI-produced material remains
 
-src/client.py, run(args): AI provided a simplified example for the EOF check, including exception handling and behavior. This logic remains in my modified implementation.
+src/client.py, run(args): AI provided a simplified example for the EOF check, including exception handling and behavior. This logic remains in my modified implementation. It also helped with error handling and improved my try/finally blocks.
 
 ## 5. One thing the AI got wrong — or how you checked it
 
