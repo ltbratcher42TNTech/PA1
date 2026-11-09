@@ -16,6 +16,11 @@ import argparse
 import os
 import sys
 import threading
+import hashlib
+import struct
+import stat
+import tempfile
+from datetime import datetime
 
 import etp
 import transport                     # the seam: see src/transport.py
