@@ -19,6 +19,9 @@ import sys
 import traceback
 import os
 import tempfile
+import hashlib
+import struct
+
 import etp
 import transport                     # the seam: see src/transport.py
 
@@ -38,6 +41,8 @@ def run(args):
     temp_path = None
     list_payload = None
     server_error = False
+    put_digest = None
+    digest_mismatch = False
 
     try:
         hello_msg = etp.encode(etp.HELLO, payload=args.name.encode("ascii"))
@@ -66,8 +71,6 @@ def run(args):
             else:
                 list_payload = payload
             
-            list_payload = payload
-
         elif args.command == "get":
             # convert to bytes
             remote_bytes = args.remote.encode("utf-8")
@@ -90,25 +93,41 @@ def run(args):
                     temp_file.write(payload)
 
         elif args.command == "put":
-            return EXIT_FAILURE
-            # TODO: Open args.local in binary mode and read its contents.
+            with open(args.local, "rb") as file:
+                file_bytes = file.read()
 
-            # TODO: Validate args.remote against ETP naming rules.
+            remote_bytes = args.remote.encode("utf-8")
 
-            # TODO: Check file size against the protocol's limits.
+            payload_size = 2 + len(remote_bytes) + len(file_bytes)
 
-            # TODO: Build the PUT payload according to the specification.
+            if payload_size > etp.MAX_LEN:
+                print("file too large for etp", file=sys.stderr)
+                return EXIT_FAILURE
 
-            # TODO: Encode and send the PUT request.
+            if len(remote_bytes) > 65535:
+                return EXIT_FAILURE
+            
+            payload = struct.pack("!H", len(remote_bytes)) + remote_bytes + file_bytes
+            put_msg = etp.encode(etp.PUT, payload)
+            transport.send_all(conn, put_msg)
+            version, mtype, status, length, payload = etp.read_message(conn, transport)
 
-            # TODO: Read the server's response.
+            if mtype == etp.ERROR:
+                server_error = True
+                print(f"Server error {status}: {payload.decode('utf-8', errors='replace')}", file=sys.stderr)
+            elif mtype != etp.PUT_OK:
+                return EXIT_FAILURE
+            else:
+                if length != 32:
+                    return EXIT_FAILURE
 
-            # TODO: Handle ERROR and unexpected response types.
+                expected_digest = hashlib.sha256(file_bytes).digest()
 
-            # TODO: Validate the PUT_OK response and its digest.
-
-            # TODO: Print the required 64-character hexadecimal digest
-            # to stdout after successful PUT.
+                if payload != expected_digest:
+                    digest_mismatch = True
+                else:
+                    # Save the successful digest for printing after BYE.
+                    put_digest = expected_digest.hex()
 
         bye_msg = etp.encode(etp.BYE)
         transport.send_all(conn, bye_msg)
@@ -128,10 +147,20 @@ def run(args):
         if temp_path is not None:
             os.replace(temp_path, args.local)
             temp_path = None
-        if list_payload is not None:
-            sys.stdout.buffer.write(list_payload)
+
+        # placed PUT error handling here as when it's in PUT, it never reaches by and fails C03
         if server_error:
             return EXIT_SERVER_ERROR
+
+        if digest_mismatch:
+            return EXIT_DIGEST
+
+        if list_payload is not None:
+            sys.stdout.buffer.write(list_payload)
+
+        if put_digest is not None:
+            print(put_digest)
+
         return EXIT_OK
     finally:
         try:
