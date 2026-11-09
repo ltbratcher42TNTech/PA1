@@ -15,10 +15,12 @@ See "Note to AI Assistants" in the PA1 brief.
 import argparse
 import os
 import sys
+import threading
 
 import etp
 import transport                     # the seam: see src/transport.py
 
+SERVER_NAME = b"Tyler-Lanis ETP server"
 
 def handle_session(conn, peer, root):
     """Serve one client from HELLO to BYE (Specification, Sections 5-8).
@@ -28,7 +30,50 @@ def handle_session(conn, peer, root):
     per response (Section 9), and close when the session ends -- for any reason.
     A failure here must end THIS session only, never the server.
     """
-    raise NotImplementedError
+    ready = False
+
+    try:
+        while True:
+            try:
+                version, mtype, status, length, payload = etp.read_message(conn, transport)
+
+            except ValueError as e:
+                error_code = e.args[0]
+                response = etp.encode(etp.ERROR, status=error_code)
+                transport.send_all(conn, response)
+                print(f"{peer} ERROR {error_code}")
+                break
+
+            if mtype not in (etp.HELLO, etp.LIST, etp.GET, etp.PUT, etp.BYE):
+                response = etp.encode(etp.ERROR, status=etp.BAD_TYPE)
+
+            elif not ready and mtype != etp.HELLO:
+                response = etp.encode(etp.ERROR, status=etp.NOT_READY)
+                transport.send_all(conn, response)
+                print(f"{peer} ERROR {etp.NOT_READY}")
+                break
+
+            elif mtype == etp.HELLO:
+                ready = True
+                response = etp.encode(etp.HELLO_OK, SERVER_NAME)
+
+            elif mtype == etp.BYE:
+                response = etp.encode(etp.BYE_OK)
+                transport.send_all(conn, response)
+                print(f"{peer} BYE")
+                break
+
+            else:
+                response = etp.encode(etp.ERROR, status=etp.BAD_REQUEST)
+
+            transport.send_all(conn, response)
+            print(f"{peer} response={response[1]:02X}")
+
+    except (OSError, transport.ConnectionClosed):
+        print(f"{peer} disconnected")
+
+    finally:
+        transport.close(conn)
 
 
 def main():
@@ -41,10 +86,29 @@ def main():
         print(f"etp-server: root directory {args.root!r} does not exist", file=sys.stderr)
         return 2
 
-    # TODO: listen through the transport, then accept sessions forever,
-    # serving each one so that a stalled client cannot delay the others
-    # (Specification, Section 9: Concurrency).
-    raise NotImplementedError
+    server = transport.listen(args.bind, args.port)
+
+    print(f"ETP server listening on {args.bind}:{args.port}")
+
+    try:
+        while True:
+            try:
+                conn, peer = transport.accept(server)
+
+            except OSError as e:
+                print(f"Error accepting connection: {e}", file=sys.stderr)
+                continue
+
+            thread = threading.Thread(
+                target=handle_session,
+                args=(conn, peer, args.root),
+                daemon=True
+            )
+
+            thread.start()
+
+    finally:
+        transport.close(server)
 
 
 if __name__ == "__main__":
