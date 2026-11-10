@@ -67,13 +67,17 @@ def handle_list(root, length):
                 info = entry.stat(follow_symlinks=False)
 
                 if stat.S_ISREG(info.st_mode):
-                    entries.append((name, info.st_size))
+                    line = name + b"\t" + str(info.st_size).encode() + b"\n"
+                    entries.append(line)
 
-        entries.sort(key=lambda item: item[0])
+        entries.sort(key=lambda line: line.split(b"\t")[0])
 
-        payload = b""
-        for name, size in entries:
-            payload += name + b"\t" + str(size).encode() + b"\n"
+        total_size = sum(len(line) for line in entries)
+
+        if total_size > etp.MAX_LEN:
+            return etp.encode(etp.ERROR, status=etp.SERVER_ERROR)
+
+        payload = b"".join(entries)
 
         return etp.encode(etp.LIST_OK, payload)
 
