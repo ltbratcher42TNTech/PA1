@@ -8,7 +8,7 @@ capture. The numbers must come from your capture: they are checked against it._
 ## How I captured it
 
 Captured on the Lab 0 Linux VM, on the loopback interface, from the repository
-root (`~/PA1`). The transferred file was 262,144 bytes (256 KiB) of random data.
+root (`~/csc4200-work/PA1`). The transferred file was 262,144 bytes (256 KiB) of random data.
 
 ```
 # Terminal 1 -- server
