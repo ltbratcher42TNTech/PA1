@@ -27,6 +27,29 @@ import transport                     # the seam: see src/transport.py
 
 SERVER_NAME = b"Tyler-Lanis ETP server"
 
+LOG_LOCK = threading.Lock()
+
+TYPE_NAMES = {
+    etp.HELLO: "HELLO",
+    etp.LIST: "LIST",
+    etp.GET: "GET",
+    etp.PUT: "PUT",
+    etp.BYE: "BYE"
+}
+
+
+def log(peer, mtype, status, length):
+    timestamp = datetime.now().isoformat(timespec="milliseconds")
+    address = f"{peer[0]}:{peer[1]}"
+    type_name = TYPE_NAMES.get(mtype, f"0x{mtype:02X}")
+
+    with LOG_LOCK:
+        print(
+            f"{timestamp} {address} {type_name} {status} {length}",
+            flush=True
+        )
+
+
 def handle_session(conn, peer, root):
     """Serve one client from HELLO to BYE (Specification, Sections 5-8).
 
