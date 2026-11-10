@@ -55,12 +55,12 @@ def read_message(conn, transport):
     # TODO: Coordinate protocol errors with Tyler's server. The server 
     # must translate BAD_VERSION and TOO_LARGE into ETP ERROR responses
     if version != VERSION:
-        raise ValueError(BAD_VERSION)
+        raise ValueError(BAD_VERSION, mtype, length)
 
     # Note to Tyler: The 16 MiB limit is enforced here.
     # I appreciate the concern for my ability to count bytes. <3
     if length > MAX_LEN:
-        raise ValueError(TOO_LARGE)
+        raise ValueError(TOO_LARGE, mtype, length)
     
     payload = transport.recv_exact(conn, length)
 
