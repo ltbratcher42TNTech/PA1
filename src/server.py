@@ -50,6 +50,109 @@ def log(peer, mtype, status, length):
         )
 
 
+def handle_list(root, length):
+    if length != 0:
+        return etp.encode(etp.ERROR, status=etp.BAD_REQUEST)
+
+    try:
+        entries = []
+
+        with os.scandir(root) as folder:
+            for entry in folder:
+                name = os.fsencode(entry.name)
+
+                if not etp.valid_name(name):
+                    continue
+
+                info = entry.stat(follow_symlinks=False)
+
+                if stat.S_ISREG(info.st_mode):
+                    entries.append((name, info.st_size))
+
+        entries.sort(key=lambda item: item[0])
+
+        payload = b""
+        for name, size in entries:
+            payload += name + b"\t" + str(size).encode() + b"\n"
+
+        return etp.encode(etp.LIST_OK, payload)
+
+    except OSError:
+        return etp.encode(etp.ERROR, status=etp.SERVER_ERROR)
+
+
+def handle_get(root, payload):
+    if not etp.valid_name(payload):
+        return etp.encode(etp.ERROR, status=etp.BAD_NAME)
+
+    path = os.path.join(root, payload.decode("ascii"))
+
+    try:
+        info = os.lstat(path)
+
+        if not stat.S_ISREG(info.st_mode):
+            return etp.encode(etp.ERROR, status=etp.NOT_FOUND)
+
+        if info.st_size > etp.MAX_LEN:
+            return etp.encode(etp.ERROR, status=etp.SERVER_ERROR)
+
+        with open(path, "rb") as file:
+            data = file.read(etp.MAX_LEN + 1)
+
+        if len(data) > etp.MAX_LEN:
+            return etp.encode(etp.ERROR, status=etp.SERVER_ERROR)
+
+        return etp.encode(etp.GET_OK, data)
+
+    except OSError:
+        return etp.encode(etp.ERROR, status=etp.SERVER_ERROR)
+
+
+def handle_put(root, payload, length):
+    if length < 2:
+        return etp.encode(etp.ERROR, status=etp.BAD_REQUEST)
+
+    name_length = struct.unpack("!H", payload[:2])[0]
+
+    if name_length > length - 2:
+        return etp.encode(etp.ERROR, status=etp.BAD_REQUEST)
+
+    name = payload[2:2 + name_length]
+    data = payload[2 + name_length:]
+
+    if not etp.valid_name(name):
+        return etp.encode(etp.ERROR, status=etp.BAD_NAME)
+
+    path = os.path.join(root, name.decode("ascii"))
+    temp_path = None
+
+    try:
+        if os.path.isdir(path):
+            return etp.encode(etp.ERROR, status=etp.SERVER_ERROR)
+
+        fd, temp_path = tempfile.mkstemp(prefix=".", dir=root)
+
+        with os.fdopen(fd, "wb") as file:
+            file.write(data)
+
+        os.replace(temp_path, path)
+        temp_path = None
+
+        digest = hashlib.sha256(data).digest()
+
+        return etp.encode(etp.PUT_OK, digest)
+
+    except OSError:
+        return etp.encode(etp.ERROR, status=etp.SERVER_ERROR)
+
+    finally:
+        if temp_path is not None:
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
+
 def handle_session(conn, peer, root):
     """Serve one client from HELLO to BYE (Specification, Sections 5-8).
 
@@ -63,13 +166,23 @@ def handle_session(conn, peer, root):
     try:
         while True:
             try:
-                version, mtype, status, length, payload = etp.read_message(conn, transport)
+                version, mtype, status, length, payload = etp.read_message(
+                    conn, transport
+                )
 
             except ValueError as e:
                 error_code = e.args[0]
+
+                if len(e.args) >= 3:
+                    request_type = e.args[1]
+                    request_length = e.args[2]
+                else:
+                    request_type = 0
+                    request_length = 0
+
                 response = etp.encode(etp.ERROR, status=error_code)
                 transport.send_all(conn, response)
-                print(f"{peer} ERROR {error_code}")
+                log(peer, request_type, response[2], request_length)
                 break
 
             if mtype not in (etp.HELLO, etp.LIST, etp.GET, etp.PUT, etp.BYE):
@@ -78,27 +191,46 @@ def handle_session(conn, peer, root):
             elif not ready and mtype != etp.HELLO:
                 response = etp.encode(etp.ERROR, status=etp.NOT_READY)
                 transport.send_all(conn, response)
-                print(f"{peer} ERROR {etp.NOT_READY}")
+                log(peer, mtype, response[2], length)
                 break
 
             elif mtype == etp.HELLO:
-                ready = True
-                response = etp.encode(etp.HELLO_OK, SERVER_NAME)
+                if ready:
+                    response = etp.encode(etp.ERROR, status=etp.BAD_REQUEST)
+
+                elif not (1 <= len(payload) <= 32) or not all(
+                    0x21 <= byte <= 0x7E for byte in payload
+                ):
+                    response = etp.encode(etp.ERROR, status=etp.BAD_REQUEST)
+
+                else:
+                    ready = True
+                    response = etp.encode(etp.HELLO_OK, SERVER_NAME)
 
             elif mtype == etp.BYE:
-                response = etp.encode(etp.BYE_OK)
-                transport.send_all(conn, response)
-                print(f"{peer} BYE")
-                break
+                if length != 0:
+                    response = etp.encode(etp.ERROR, status=etp.BAD_REQUEST)
+                else:
+                    response = etp.encode(etp.BYE_OK)
+                    transport.send_all(conn, response)
+                    log(peer, mtype, response[2], length)
+                    break
 
-            else:
-                response = etp.encode(etp.ERROR, status=etp.BAD_REQUEST)
+            elif mtype == etp.LIST:
+                response = handle_list(root, length)
+
+            elif mtype == etp.GET:
+                response = handle_get(root, payload)
+
+            elif mtype == etp.PUT:
+                response = handle_put(root, payload, length)
 
             transport.send_all(conn, response)
-            print(f"{peer} response={response[1]:02X}")
 
-    except (OSError, transport.ConnectionClosed):
-        print(f"{peer} disconnected")
+            log(peer, mtype, response[2], length)
+
+    except (OSError, transport.ConnectionClosed) as e:
+        print(f"{peer} disconnected: {e}", file=sys.stderr)
 
     finally:
         transport.close(conn)
@@ -110,13 +242,28 @@ def main():
     ap.add_argument("--root", required=True)
     ap.add_argument("--bind", default="127.0.0.1")
     args = ap.parse_args()
+
     if not os.path.isdir(args.root):
-        print(f"etp-server: root directory {args.root!r} does not exist", file=sys.stderr)
+        print(
+            f"etp-server: root directory {args.root!r} does not exist",
+            file=sys.stderr
+        )
         return 2
 
-    server = transport.listen(args.bind, args.port)
+    if not 1 <= args.port <= 65535:
+        print("etp-server: port must be between 1 and 65535", file=sys.stderr)
+        return 2
 
-    print(f"ETP server listening on {args.bind}:{args.port}")
+    try:
+        server = transport.listen(args.bind, args.port)
+    except OSError as e:
+        print(f"etp-server: could not listen: {e}", file=sys.stderr)
+        return 2
+
+    print(
+        f"ETP server listening on {args.bind}:{args.port}",
+        file=sys.stderr
+    )
 
     try:
         while True:
