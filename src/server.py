@@ -131,8 +131,14 @@ def handle_put(root, payload, length):
     temp_path = None
 
     try:
-        if os.path.isdir(path):
-            return etp.encode(etp.ERROR, status=etp.SERVER_ERROR)
+        try:
+            info = os.lstat(path)
+
+            if not stat.S_ISREG(info.st_mode):
+                return etp.encode(etp.ERROR, status=etp.SERVER_ERROR)
+
+        except FileNotFoundError:
+            pass
 
         fd, temp_path = tempfile.mkstemp(prefix=".", dir=root)
 
