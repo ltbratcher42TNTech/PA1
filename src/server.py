@@ -92,7 +92,11 @@ def handle_get(root, payload):
     path = os.path.join(root, payload.decode("ascii"))
 
     try:
-        info = os.lstat(path)
+        try:
+            info = os.lstat(path)
+
+        except FileNotFoundError:
+            return etp.encode(etp.ERROR, status=etp.NOT_FOUND)
 
         if not stat.S_ISREG(info.st_mode):
             return etp.encode(etp.ERROR, status=etp.NOT_FOUND)
