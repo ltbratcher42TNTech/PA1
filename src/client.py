@@ -126,7 +126,7 @@ def run(args):
                 if payload != expected_digest:
                     digest_mismatch = True
                 else:
-                    # Save the successful digest for printing after BYE.
+                    # save the successful digest for printing after BYE.
                     put_digest = expected_digest.hex()
 
         bye_msg = etp.encode(etp.BYE)
