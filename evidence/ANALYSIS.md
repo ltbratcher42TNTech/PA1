@@ -7,10 +7,25 @@ capture. The numbers must come from your capture: they are checked against it._
 
 ## How I captured it
 
-_Paste the exact commands you ran (capture, server, client, ss), and the size of
-the file you transferred._
+Captured on the Lab 0 Linux VM, on the loopback interface, from the repository
+root (`~/csc4200-work/PA1`). The transferred file was 262,144 bytes (256 KiB) of random data.
 
 ```
+# Terminal 1 -- server
+mkdir -p server-files scratch
+make run-server PORT=5000 ROOT=server-files
+
+# Terminal 2 -- test file and capture (200-byte snap length)
+head -c 262144 /dev/urandom > scratch/test.bin
+sudo tcpdump -i lo -s 200 -Z $USER -w evidence/pa1-capture.pcap 'tcp port 5000'
+
+# Terminal 3 -- client: PUT, then GET of the same file, then ss within 60 s
+./etp-client --host 127.0.0.1 --port 5000 --name tyler put scratch/test.bin test.bin
+./etp-client --host 127.0.0.1 --port 5000 --name tyler get test.bin scratch/got.bin
+ss -tan | grep -E 'State|:5000' > evidence/time-wait.txt
+cmp scratch/test.bin scratch/got.bin && echo SAME
+
+# Then Ctrl+C in Terminal 2 (stop tcpdump) and Terminal 1 (stop the server)
 ```
 
 ## Facts
