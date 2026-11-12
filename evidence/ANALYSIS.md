@@ -38,14 +38,14 @@ the "Sequence Number (raw)" field. With tshark, add
 `etp-facts` label: a script reads this block._
 
 ```etp-facts
-server_port:
-client_port:
-client_isn:                      # raw sequence number in the client's SYN
-server_isn:                      # raw sequence number in the server's SYN/ACK
-client_mss:                      # MSS option value in the client's SYN, in bytes
-server_to_client_payload_bytes:  # all TCP payload bytes the server sent in this session (HELLO_OK + GET_OK + BYE_OK)
-server_to_client_data_segments:  # server-to-client frames with payload, across all three responses, counted as captured
-first_fin_from:                  # server or client
+server_port: 5000
+client_port: 52012
+client_isn: 3657328345                  # raw sequence number in the client's SYN
+server_isn: 4114998914                  # raw sequence number in the server's SYN/ACK
+client_mss: 65495                       # MSS option value in the client's SYN, in bytes
+server_to_client_payload_bytes: 229950  # all TCP payload bytes the server sent in this session (HELLO_OK + GET_OK + BYE_OK)
+server_to_client_data_segments: 9       # server-to-client frames with payload, across all three responses, counted as captured
+first_fin_from: server                  # server or client
 ```
 
 ## Q1. The handshake
