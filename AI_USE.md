@@ -45,6 +45,7 @@
 | 12 | Lanis | ChatGPT | Asked for explanations of ETP/1 framing, message headers, and recv_exact | Used the explanations to understand the 8-byte header, payload length, and fragmented messages | Applied concepts to my own implementation | Ran the self check tests and reviewed the protocol specification |
 | 13 | Lanis | ChatGPT | Asked for help reviewing and debugging my client implementation, including HELLO, LIST, GET, PUT, and BYE | Used debugging ideas for error handling, flow, and the EOF check | Modified the suggestions to work with my existing code and transport interface | Ran the client self-checks, eventually passing all six tests |
 | 14 | Lanis | ChatGPT | Generate a mock server to test the client | Temporary mock server (HELLO, LIST, GET, BYE); not submitted | Replaced by Tyler's real server | Client later passed all six client self-checks against the real server |
+| 15 | Lanis | ChatGPT | Asked for help reviewing DESIGN.md, resolving Git merge conflicts, and completing AI_USE.md | Used suggested wording, technical explanations, and Git instructions | Edited suggestions to match our implementation and combined my changes with Tyler's | Compared documentation against our source code, reviewed merge results, and checked the repository |
 
 ## 4. Where AI-produced material remains
 
