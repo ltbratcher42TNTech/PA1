@@ -40,8 +40,8 @@
 | 7 | Tyler | Claude | How to apply a display filter / add a column in Wireshark | Step-by-step UI instructions | — | Worked in Wireshark |
 | 8 | Tyler | Claude | Review and reformat my answers to Q1–Q5 | Markdown tables, code blocks, headings; checked answers against the specification | Answers' content is ours | Compared with the specification and our capture |
 | 9 | Tyler | Claude | Review `DESIGN.md`; fix the must-fix items | Typo fixes, template prompts removed, file names | Content gaps left for us to write | Read through the result |
-| 10 | Tyler | Claude | Fill in `AI_USE.md` from our session | Draft of §2–§5 | _[edit as needed]_ | Read and corrected by both of us |
-| 11 | Tyler | Claude | Draft a team plan that splits the work fairly | `TEAM_PLAN.md` | _[edit as needed]_ | Agreed on by both of us |
+| 10 | Tyler | Claude | Fill in `AI_USE.md` from our session | Draft of §2–§5 | Read and corrected by both of us |
+| 11 | Tyler | Claude | Draft a team plan that splits the work fairly | `TEAM_PLAN.md` | Agreed on by both of us |
 | 12 | Lanis | ChatGPT | Asked for explanations of ETP/1 framing, message headers, and recv_exact | Used the explanations to understand the 8-byte header, payload length, and fragmented messages | Applied concepts to my own implementation | Ran the self check tests and reviewed the protocol specification |
 | 13 | Lanis | ChatGPT | Asked for help reviewing and debugging my client implementation, including HELLO, LIST, GET, PUT, and BYE | Used debugging ideas for error handling, flow, and the EOF check | Modified the suggestions to work with my existing code and transport interface | Ran the client self-checks, eventually passing all six tests |
 | 14 | Lanis | ChatGPT | Generate a mock server to test the client | Temporary mock server (HELLO, LIST, GET, BYE); not submitted | Replaced by Tyler's real server | Client later passed all six client self-checks against the real server |
