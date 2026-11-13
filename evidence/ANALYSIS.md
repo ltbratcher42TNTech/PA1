@@ -165,6 +165,51 @@ end of one ETP message and the start of the next, or did one ETP message span
 several segments? Explain what this means for code that reads an ETP message, and
 point to the place in your own code that deals with it._
 
+The GET_OK response is carried in **7 TCP data segments**: server-to-client frames 33, 34, 36, 38, 39, 41 and 42.
+
+Using the TCP sequence-number progression, their payload sizes are:
+
+| Frame | TCP payload size |
+|---|---|
+| 33 | 32,768 bytes |
+| 34 | 32,768 bytes |
+| 36 | 61,440 bytes |
+| 38 | 47,360 bytes |
+| 39 | 22,272 bytes |
+| 41 | 47,360 bytes |
+| 42 | 18,184 bytes |
+| **Total** | **262,152 bytes** |
+
+Check:
+
+```
+32,768 + 32,768 + 61,440 + 47,360 + 22,272 + 47,360 + 18,184 = 262,152
+                                                             = 8-byte header + 262,144-byte file
+```
+
+**Were they all the same size?**
+No. Their payload sizes vary.
+
+**Were they all the MSS?**
+No. The client's advertised MSS was 65,495 bytes, and none of these seven payloads is that size.
+
+**Did a segment contain the end of one ETP message and the beginning of another?**
+No. In this capture, the GET_OK response occupies its own seven segments. The BYE_OK response is in a separate segment (frame 45).
+
+**Did one ETP message span several segments?**
+Yes. The single GET_OK message is spread across all seven segments above.
+
+**What this means for our code**
+
+TCP provides a byte stream, not individual application messages. An application cannot assume that one `recv()` call will return one complete ETP message. A message can be split across multiple TCP segments, and multiple messages can potentially arrive together.
+
+Our code handles this using:
+
+- `src/etp.py:51` reads the 8 byte header, while `src/etp.py:65` reads the LENGTH of payloads.
+- `src/transport_tcp.py:74-78` to obtain the exact number of bytes requested.
+
+That is why our implementation needs to handle partial reads instead of assuming one `recv()` equals one message.
+
 ## Q4. Teardown and TIME-WAIT
 
 _Which side sent the first FIN in the GET session, and why — cite the rule in the
