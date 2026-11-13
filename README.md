@@ -1,8 +1,11 @@
 # PA1 — ETP/1 Client and Server
 
-**Student:** _your full name_ (`your-github-username`)
-**Course:** CSC 4200 / CSC 5200 (delete one) — Fall 2026
-**Language:** _C or Python_
+# Best Student:
+**Student:** Tyler Brinkman (`TBrink22`)
+# Meh Student:
+**Student:** Lanis Bratcher (`your-github-username`)
+**Course:** CSC 4200 — Fall 2026
+**Language:** Python_
 **Submitted commit:** _the SHA you paste into Canvas_
 
 ## Build and run

@@ -55,6 +55,36 @@ three handshake segments of the GET session. Explain why the acknowledgment numb
 in the third segment is what it is. What MSS did the client advertise, and what on
 your machine determines that value?_
 
+The three-way TCP handshake of the GET session consists of frames 25, 26 and 27.
+
+| Frame | Flags | Raw sequence number | Raw acknowledgment number |
+|---|---|---|---|
+| 25 | SYN | 3657328345 | 0 |
+| 26 | SYN, ACK | 4114998914 | 3657328346 |
+| 27 | ACK | 3657328346 | 4114998915 |
+
+**Why does the third segment have that acknowledgment number?**
+
+TCP acknowledgment numbers indicate the next sequence number expected.
+
+- The client sends its SYN using sequence number 3657328345.
+- A SYN consumes one sequence number.
+- The server therefore acknowledges 3657328346.
+- The server sends its SYN using sequence number 4114998914.
+- The client acknowledges 4114998915 in frame 27.
+
+**Client MSS: 65495 bytes**
+
+The client advertises an MSS of 65495 bytes in frame 25.
+
+MSS is determined by the network interface's MTU and the IP/TCP header sizes. For IPv4:
+
+```
+65535 - 20 - 20 = 65495
+```
+
+This reflects the maximum IPv4 packet size minus the standard 20-byte IP and 20-byte TCP headers. The loopback interface's MTU and TCP's IPv4 size limit determine the advertised value.
+
 ## Q2. Your protocol on the wire
 
 _Find the segment that carries your client's GET request. Give its frame number,
