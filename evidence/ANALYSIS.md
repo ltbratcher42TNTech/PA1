@@ -94,6 +94,68 @@ GET_OK. Does GET_OK's LENGTH equal the size of your file? Show the arithmetic th
 connects `server_to_client_payload_bytes` to the three responses the server sent in
 this session._
 
+### Client's GET request: frame 32
+
+The first eight payload bytes are:
+
+```
+01 03 00 00 00 00 00 08
+```
+
+| Field | Hex | Meaning |
+|---|---|---|
+| VERSION | `01` | Protocol version 1 |
+| TYPE | `03` | GET request |
+| STATUS | `00` | No error |
+| RESERVED | `00` | Reserved field |
+| LENGTH | `00 00 00 08` | 8 bytes |
+
+The remaining eight bytes contain the filename:
+
+```
+74 65 73 74 2e 62 69 6e   ->   "test.bin" (ASCII)
+```
+
+### Server's GET_OK response: frame 33
+
+The first eight payload bytes are:
+
+```
+01 83 00 00 00 04 00 00
+```
+
+| Field | Hex | Meaning |
+|---|---|---|
+| VERSION | `01` | Protocol version 1 |
+| TYPE | `83` | GET_OK response |
+| STATUS | `00` | Success |
+| RESERVED | `00` | Reserved field |
+| LENGTH | `00 04 00 00` | 262,144 bytes |
+
+The LENGTH field equals the size of our file:
+
+```
+0x00040000 = 262,144 bytes = 256 KiB
+```
+
+### Server-to-client payload arithmetic
+
+The server sends three responses:
+
+| Response | Payload bytes |
+|---|---|
+| HELLO_OK | 30 |
+| GET_OK header | 8 |
+| GET_OK file contents | 262,144 |
+| BYE_OK | 8 |
+| **Total** | **262,190** |
+
+```
+30 + (8 + 262,144) + 8 = 262,190
+```
+
+This matches `server_to_client_payload_bytes` (262190) in our facts.
+
 ## Q3. A byte stream, not messages
 
 _How many segments carried the **GET_OK response** (not counting the segments
