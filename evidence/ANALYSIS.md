@@ -217,6 +217,46 @@ specification. Paste the relevant line(s) from `evidence/time-wait.txt`. Which e
 of the connection (address and port) is in TIME-WAIT, why that end, and roughly how
 long Linux keeps it there? Connect this to the SO_REUSEADDR requirement._
 
+### 1. Which side sends the first FIN?
+
+In the GET session, the server sends the first FIN, meaning the server performs the active close.
+
+The packet capture shows the following sequence:
+
+| Frame | Direction | ETP/TCP message | Description |
+|---|---|---|---|
+| 44 | Client → Server | BYE | Client sends the BYE request. |
+| 45 | Server → Client | BYE_OK | Server acknowledges the BYE request. |
+| 46 | Server → Client | FIN, ACK | Server initiates the TCP connection close. |
+| 47 | Client → Server | FIN, ACK | Client acknowledges the server's close and sends its own FIN. |
+| 48 | Server → Client | ACK | Server acknowledges the client's FIN. |
+
+This confirms that the server sends the first FIN and is therefore the active closer.
+
+This behavior is required by ETP Specification §5, item 4 ("Closing"). It states that after sending BYE_OK, the server closes the connection. The client waits until it detects the server's close before closing its own side. §6.5 also describes the BYE response and server close.
+
+### 2. Which end is in TIME-WAIT, and why?
+
+Because the server sends the first FIN, the server side, **127.0.0.1:5000**, enters the TIME-WAIT state.
+
+The `evidence/time-wait.txt` output shows:
+
+```
+LISTEN    0      128        127.0.0.1:5000          0.0.0.0:*
+TIME-WAIT 0      0          127.0.0.1:5000        127.0.0.1:52012
+TIME-WAIT 0      0          127.0.0.1:5000        127.0.0.1:43194
+```
+
+The first TIME-WAIT entry is the GET session, using client port 52012. The second entry, using client port 43194, is the PUT session. Therefore, the server endpoint 127.0.0.1:5000 is in TIME-WAIT for both connections.
+
+The server holds this state for approximately one minute. This gives delayed TCP segments time to disappear so they cannot be mistaken for packets belonging to a new connection. This is explained in §5, item 4 of the specification.
+
+### 3. How can the server restart on the same port?
+
+Our server sets the `SO_REUSEADDR` socket option before calling `bind()` in `src/transport_tcp.py:40`.
+
+This allows our server to bind to port 5000 again while previous connections are still in TIME-WAIT. The specification requires this behavior in §9, "Restart", and its practitioner note specifically recommends setting `SO_REUSEADDR` before `bind()`.
+
 ## Q5. What an observer learns
 
 _Suppose someone else obtained this capture file. List specifically what they
