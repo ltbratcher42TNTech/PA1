@@ -38,14 +38,14 @@ the "Sequence Number (raw)" field. With tshark, add
 `etp-facts` label: a script reads this block._
 
 ```etp-facts
-server_port:
-client_port:
-client_isn:                      # raw sequence number in the client's SYN
-server_isn:                      # raw sequence number in the server's SYN/ACK
-client_mss:                      # MSS option value in the client's SYN, in bytes
-server_to_client_payload_bytes:  # all TCP payload bytes the server sent in this session (HELLO_OK + GET_OK + BYE_OK)
-server_to_client_data_segments:  # server-to-client frames with payload, across all three responses, counted as captured
-first_fin_from:                  # server or client
+server_port: 5000
+client_port: 52012
+client_isn: 3657328345                  # raw sequence number in the client's SYN
+server_isn: 4114998914                  # raw sequence number in the server's SYN/ACK
+client_mss: 65495                       # MSS option value in the client's SYN, in bytes
+server_to_client_payload_bytes: 262190  # all TCP payload bytes the server sent in this session (HELLO_OK + GET_OK + BYE_OK)
+server_to_client_data_segments: 9       # server-to-client frames with payload, across all three responses, counted as captured
+first_fin_from: server                  # server or client
 ```
 
 ## Q1. The handshake
@@ -54,6 +54,36 @@ _Give the frame number, flags, and raw sequence and acknowledgment numbers of th
 three handshake segments of the GET session. Explain why the acknowledgment number
 in the third segment is what it is. What MSS did the client advertise, and what on
 your machine determines that value?_
+
+The three-way TCP handshake of the GET session consists of frames 25, 26 and 27.
+
+| Frame | Flags | Raw sequence number | Raw acknowledgment number |
+|---|---|---|---|
+| 25 | SYN | 3657328345 | 0 |
+| 26 | SYN, ACK | 4114998914 | 3657328346 |
+| 27 | ACK | 3657328346 | 4114998915 |
+
+**Why does the third segment have that acknowledgment number?**
+
+TCP acknowledgment numbers indicate the next sequence number expected.
+
+- The client sends its SYN using sequence number 3657328345.
+- A SYN consumes one sequence number.
+- The server therefore acknowledges 3657328346.
+- The server sends its SYN using sequence number 4114998914.
+- The client acknowledges 4114998915 in frame 27.
+
+**Client MSS: 65495 bytes**
+
+The client advertises an MSS of 65495 bytes in frame 25.
+
+MSS is determined by the network interface's MTU and the IP/TCP header sizes. For IPv4:
+
+```
+65535 - 20 - 20 = 65495
+```
+
+This reflects the maximum IPv4 packet size minus the standard 20-byte IP and 20-byte TCP headers. The loopback interface's MTU and TCP's IPv4 size limit determine the advertised value.
 
 ## Q2. Your protocol on the wire
 
@@ -64,6 +94,68 @@ GET_OK. Does GET_OK's LENGTH equal the size of your file? Show the arithmetic th
 connects `server_to_client_payload_bytes` to the three responses the server sent in
 this session._
 
+### Client's GET request: frame 32
+
+The first eight payload bytes are:
+
+```
+01 03 00 00 00 00 00 08
+```
+
+| Field | Hex | Meaning |
+|---|---|---|
+| VERSION | `01` | Protocol version 1 |
+| TYPE | `03` | GET request |
+| STATUS | `00` | No error |
+| RESERVED | `00` | Reserved field |
+| LENGTH | `00 00 00 08` | 8 bytes |
+
+The remaining eight bytes contain the filename:
+
+```
+74 65 73 74 2e 62 69 6e   ->   "test.bin" (ASCII)
+```
+
+### Server's GET_OK response: frame 33
+
+The first eight payload bytes are:
+
+```
+01 83 00 00 00 04 00 00
+```
+
+| Field | Hex | Meaning |
+|---|---|---|
+| VERSION | `01` | Protocol version 1 |
+| TYPE | `83` | GET_OK response |
+| STATUS | `00` | Success |
+| RESERVED | `00` | Reserved field |
+| LENGTH | `00 04 00 00` | 262,144 bytes |
+
+The LENGTH field equals the size of our file:
+
+```
+0x00040000 = 262,144 bytes = 256 KiB
+```
+
+### Server-to-client payload arithmetic
+
+The server sends three responses:
+
+| Response | Payload bytes |
+|---|---|
+| HELLO_OK | 30 |
+| GET_OK header | 8 |
+| GET_OK file contents | 262,144 |
+| BYE_OK | 8 |
+| **Total** | **262,190** |
+
+```
+30 + (8 + 262,144) + 8 = 262,190
+```
+
+This matches `server_to_client_payload_bytes` (262190) in our facts.
+
 ## Q3. A byte stream, not messages
 
 _How many segments carried the **GET_OK response** (not counting the segments
@@ -73,12 +165,97 @@ end of one ETP message and the start of the next, or did one ETP message span
 several segments? Explain what this means for code that reads an ETP message, and
 point to the place in your own code that deals with it._
 
+The GET_OK response is carried in **7 TCP data segments**: server-to-client frames 33, 34, 36, 38, 39, 41 and 42.
+
+Using the TCP sequence-number progression, their payload sizes are:
+
+| Frame | TCP payload size |
+|---|---|
+| 33 | 32,768 bytes |
+| 34 | 32,768 bytes |
+| 36 | 61,440 bytes |
+| 38 | 47,360 bytes |
+| 39 | 22,272 bytes |
+| 41 | 47,360 bytes |
+| 42 | 18,184 bytes |
+| **Total** | **262,152 bytes** |
+
+Check:
+
+```
+32,768 + 32,768 + 61,440 + 47,360 + 22,272 + 47,360 + 18,184 = 262,152
+                                                             = 8-byte header + 262,144-byte file
+```
+
+**Were they all the same size?**
+No. Their payload sizes vary.
+
+**Were they all the MSS?**
+No. The client's advertised MSS was 65,495 bytes, and none of these seven payloads is that size.
+
+**Did a segment contain the end of one ETP message and the beginning of another?**
+No. In this capture, the GET_OK response occupies its own seven segments. The BYE_OK response is in a separate segment (frame 45).
+
+**Did one ETP message span several segments?**
+Yes. The single GET_OK message is spread across all seven segments above.
+
+**What this means for our code**
+
+TCP provides a byte stream, not individual application messages. An application cannot assume that one `recv()` call will return one complete ETP message. A message can be split across multiple TCP segments, and multiple messages can potentially arrive together.
+
+Our code handles this using:
+
+- `src/etp.py:51` reads the 8 byte header, while `src/etp.py:65` reads the LENGTH of payloads.
+- `src/transport_tcp.py:74-78` to obtain the exact number of bytes requested.
+
+That is why our implementation needs to handle partial reads instead of assuming one `recv()` equals one message.
+
 ## Q4. Teardown and TIME-WAIT
 
 _Which side sent the first FIN in the GET session, and why — cite the rule in the
 specification. Paste the relevant line(s) from `evidence/time-wait.txt`. Which end
 of the connection (address and port) is in TIME-WAIT, why that end, and roughly how
 long Linux keeps it there? Connect this to the SO_REUSEADDR requirement._
+
+### 1. Which side sends the first FIN?
+
+In the GET session, the server sends the first FIN, meaning the server performs the active close.
+
+The packet capture shows the following sequence:
+
+| Frame | Direction | ETP/TCP message | Description |
+|---|---|---|---|
+| 44 | Client → Server | BYE | Client sends the BYE request. |
+| 45 | Server → Client | BYE_OK | Server acknowledges the BYE request. |
+| 46 | Server → Client | FIN, ACK | Server initiates the TCP connection close. |
+| 47 | Client → Server | FIN, ACK | Client acknowledges the server's close and sends its own FIN. |
+| 48 | Server → Client | ACK | Server acknowledges the client's FIN. |
+
+This confirms that the server sends the first FIN and is therefore the active closer.
+
+This behavior is required by ETP Specification §5, item 4 ("Closing"). It states that after sending BYE_OK, the server closes the connection. The client waits until it detects the server's close before closing its own side. §6.5 also describes the BYE response and server close.
+
+### 2. Which end is in TIME-WAIT, and why?
+
+Because the server sends the first FIN, the server side, **127.0.0.1:5000**, enters the TIME-WAIT state.
+
+The `evidence/time-wait.txt` output shows:
+
+```
+LISTEN    0      128        127.0.0.1:5000          0.0.0.0:*
+TIME-WAIT 0      0          127.0.0.1:5000        127.0.0.1:52012
+TIME-WAIT 0      0          127.0.0.1:5000        127.0.0.1:43194
+```
+
+The first TIME-WAIT entry is the GET session, using client port 52012. The second entry, using client port 43194, is the PUT session. Therefore, the server endpoint 127.0.0.1:5000 is in TIME-WAIT for both connections.
+
+The server holds this state for approximately one minute. This gives delayed TCP segments time to disappear so they cannot be mistaken for packets belonging to a new connection. This is explained in §5, item 4 of the specification.
+
+### 3. How can the server restart on the same port?
+
+Our server sets the `SO_REUSEADDR` socket option before calling `bind()` in `src/transport_tcp.py:40`.
+
+This allows our server to bind to port 5000 again while previous connections are still in TIME-WAIT. The specification requires this behavior in §9, "Restart", and its practitioner note specifically recommends setting `SO_REUSEADDR` before `bind()`.
 
 ## Q5. What an observer learns
 
@@ -87,3 +264,89 @@ learn about your session (names, sizes, timing, anything else). You captured wit
 200-byte snap length: what does that hide, and what does it not hide? Which kind of
 protection would stop a real on-path observer from learning these things, and what
 would it still not hide?_
+
+The packet capture demonstrates that ETP sends information in plain text without encryption. Someone who has access to this capture file can inspect the communication between the client and server and learn information about the sessions.
+
+### 1. What information can someone see in the capture?
+
+The capture reveals the following information:
+
+| Information | Value | Frame |
+|---|---|---|
+| Client name | `tyler` | 28 |
+| Server name | `Tyler-Lanis ETP server` | 30 |
+| Requested filename | `test.bin` | 32 |
+| Server IP and port | `127.0.0.1:5000` | Multiple |
+| GET file size | 262,144 bytes | 33–42 |
+
+An observer can also determine the order of operations. The capture shows that the client first performs a PUT operation using client port 43194, then performs a GET operation using client port 52012. Both operations involve the same file, `test.bin`.
+
+### 2. What can someone learn about packet sizes and timing?
+
+The capture provides information about the sizes of packets and the amount of data transferred.
+
+For example, the GET response contains 262,144 bytes of file data. Including the 8-byte ETP header, the complete GET_OK message contains 262,152 bytes.
+
+The server sends the GET response across multiple TCP segments. Their actual TCP payload sizes are:
+
+| Frame | TCP payload size |
+|---|---|
+| 33 | 32,768 bytes |
+| 34 | 32,768 bytes |
+| 36 | 61,440 bytes |
+| 38 | 47,360 bytes |
+| 39 | 22,272 bytes |
+| 41 | 47,360 bytes |
+| 42 | 18,184 bytes |
+| **Total** | **262,152 bytes** |
+
+The packet timestamps also reveal when the sessions occurred and how long they lasted:
+
+| Session | Start (UTC) | End (UTC) | Duration |
+|---|---|---|---|
+| PUT | 15:08:40.869377 | 15:08:40.876030 | about 6.65 ms |
+| GET | 15:08:45.221013 | 15:08:45.223686 | about 2.67 ms |
+
+There was approximately 4.34 seconds between the end of the PUT session and the beginning of the GET session.
+
+This means someone with the capture can learn when the client communicated, how long the sessions lasted, and approximately how much data was transferred.
+
+### 3. What does the 200-byte snap length hide?
+
+The capture uses a snap length of 200 bytes, meaning it saves at most 200 bytes from each packet.
+
+For the large TCP packets, the Ethernet header is 14 bytes, the IPv4 header is 20 bytes, and the TCP header is 32 bytes. This leaves:
+
+```
+200 - 14 - 20 - 32 = 134 bytes
+```
+
+Therefore, only the first 134 bytes of TCP payload are saved for each of those large packets. The remaining payload bytes are not included in the capture.
+
+However, the first 134 bytes of each large segment are still visible, meaning an observer can see portions of the transferred file data.
+
+### 4. What information is still visible despite the snap length?
+
+The snap length does not hide every part of the communication.
+
+- Small ETP messages, such as HELLO, HELLO_OK, GET, BYE, and BYE_OK, fit entirely within the 200-byte limit.
+- The PUT_OK response contains a 32-byte SHA-256 digest, plus its 8-byte ETP header. It fits entirely in frame 19, so the digest is visible.
+- The IP total-length field records the original packet size, even when the packet contents are truncated in the capture.
+
+For example, the IP total-length fields allow us to calculate the original TCP payload sizes of the GET response segments. Adding the server's response messages together gives 262,190 bytes of server-to-client ETP data:
+
+```
+30 + 262,152 + 8 = 262,190 bytes
+```
+
+This includes the 30-byte HELLO_OK response, the 262,152-byte GET_OK response, and the 8-byte BYE_OK response.
+
+So, even though the capture does not save all the file contents, it still reveals message information, packet sizes, and the total amount of data transferred.
+
+### 5. How could this communication be protected?
+
+The client and server could use TLS (Transport Layer Security) to encrypt their communication. TLS would prevent someone with the capture file from directly reading the ETP messages, including client names, server names, filenames, file contents, and the PUT_OK digest.
+
+However, TLS would not hide everything. An observer could still see IP addresses, port numbers, packet timing, and approximate traffic volume. The transferred file size would also remain roughly observable because encrypted records are generally similar in size to the data being encrypted.
+
+The ETP specification discusses these security weaknesses in Section 13, Security Considerations. It explains that ETP sends everything in the clear, provides no authentication, and that the SHA-256 digest does not prevent an attacker from modifying both the transferred data and its digest.
