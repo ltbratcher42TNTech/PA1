@@ -3,7 +3,7 @@
 **Students:** Tyler Brinkman (`TBrink22`), Lanis Bratcher (`ltbratcher42TNTech`)
 **Course:** CSC 4200 — Fall 2026
 **Language:** Python 3.14.4
-**Submitted commit:** _the SHA you paste into Canvas_
+**Submitted commit:** fb78c9318490716247da8c9e2875e6919e49a8c6
 
 ## Build and run
 
