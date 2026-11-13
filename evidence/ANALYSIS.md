@@ -264,3 +264,89 @@ learn about your session (names, sizes, timing, anything else). You captured wit
 200-byte snap length: what does that hide, and what does it not hide? Which kind of
 protection would stop a real on-path observer from learning these things, and what
 would it still not hide?_
+
+The packet capture demonstrates that ETP sends information in plain text without encryption. Someone who has access to this capture file can inspect the communication between the client and server and learn information about the sessions.
+
+### 1. What information can someone see in the capture?
+
+The capture reveals the following information:
+
+| Information | Value | Frame |
+|---|---|---|
+| Client name | `tyler` | 28 |
+| Server name | `Tyler-Lanis ETP server` | 30 |
+| Requested filename | `test.bin` | 32 |
+| Server IP and port | `127.0.0.1:5000` | Multiple |
+| GET file size | 262,144 bytes | 33–42 |
+
+An observer can also determine the order of operations. The capture shows that the client first performs a PUT operation using client port 43194, then performs a GET operation using client port 52012. Both operations involve the same file, `test.bin`.
+
+### 2. What can someone learn about packet sizes and timing?
+
+The capture provides information about the sizes of packets and the amount of data transferred.
+
+For example, the GET response contains 262,144 bytes of file data. Including the 8-byte ETP header, the complete GET_OK message contains 262,152 bytes.
+
+The server sends the GET response across multiple TCP segments. Their actual TCP payload sizes are:
+
+| Frame | TCP payload size |
+|---|---|
+| 33 | 32,768 bytes |
+| 34 | 32,768 bytes |
+| 36 | 61,440 bytes |
+| 38 | 47,360 bytes |
+| 39 | 22,272 bytes |
+| 41 | 47,360 bytes |
+| 42 | 18,184 bytes |
+| **Total** | **262,152 bytes** |
+
+The packet timestamps also reveal when the sessions occurred and how long they lasted:
+
+| Session | Start (UTC) | End (UTC) | Duration |
+|---|---|---|---|
+| PUT | 15:08:40.869377 | 15:08:40.876030 | about 6.65 ms |
+| GET | 15:08:45.221013 | 15:08:45.223686 | about 2.67 ms |
+
+There was approximately 4.34 seconds between the end of the PUT session and the beginning of the GET session.
+
+This means someone with the capture can learn when the client communicated, how long the sessions lasted, and approximately how much data was transferred.
+
+### 3. What does the 200-byte snap length hide?
+
+The capture uses a snap length of 200 bytes, meaning it saves at most 200 bytes from each packet.
+
+For the large TCP packets, the Ethernet header is 14 bytes, the IPv4 header is 20 bytes, and the TCP header is 32 bytes. This leaves:
+
+```
+200 - 14 - 20 - 32 = 134 bytes
+```
+
+Therefore, only the first 134 bytes of TCP payload are saved for each of those large packets. The remaining payload bytes are not included in the capture.
+
+However, the first 134 bytes of each large segment are still visible, meaning an observer can see portions of the transferred file data.
+
+### 4. What information is still visible despite the snap length?
+
+The snap length does not hide every part of the communication.
+
+- Small ETP messages, such as HELLO, HELLO_OK, GET, BYE, and BYE_OK, fit entirely within the 200-byte limit.
+- The PUT_OK response contains a 32-byte SHA-256 digest, plus its 8-byte ETP header. It fits entirely in frame 19, so the digest is visible.
+- The IP total-length field records the original packet size, even when the packet contents are truncated in the capture.
+
+For example, the IP total-length fields allow us to calculate the original TCP payload sizes of the GET response segments. Adding the server's response messages together gives 262,190 bytes of server-to-client ETP data:
+
+```
+30 + 262,152 + 8 = 262,190 bytes
+```
+
+This includes the 30-byte HELLO_OK response, the 262,152-byte GET_OK response, and the 8-byte BYE_OK response.
+
+So, even though the capture does not save all the file contents, it still reveals message information, packet sizes, and the total amount of data transferred.
+
+### 5. How could this communication be protected?
+
+The client and server could use TLS (Transport Layer Security) to encrypt their communication. TLS would prevent someone with the capture file from directly reading the ETP messages, including client names, server names, filenames, file contents, and the PUT_OK digest.
+
+However, TLS would not hide everything. An observer could still see IP addresses, port numbers, packet timing, and approximate traffic volume. The transferred file size would also remain roughly observable because encrypted records are generally similar in size to the data being encrypted.
+
+The ETP specification discusses these security weaknesses in Section 13, Security Considerations. It explains that ETP sends everything in the clear, provides no authentication, and that the SHA-256 digest does not prevent an attacker from modifying both the transferred data and its digest.
