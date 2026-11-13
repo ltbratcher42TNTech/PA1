@@ -45,7 +45,7 @@
 | 12 | Lanis | ChatGPT | Asked for explanations of ETP/1 framing, message headers, and recv_exact | Used the explanations to understand the 8-byte header, payload length, and fragmented messages | Applied concepts to my own implementation | Ran the self check tests and reviewed the protocol specification |
 | 13 | Lanis | ChatGPT | Asked for help reviewing and debugging my client implementation, including HELLO, LIST, GET, PUT, and BYE | Used debugging ideas for error handling, flow, and the EOF check | Modified the suggestions to work with my existing code and transport interface | Ran the client self-checks, eventually passing all six tests |
 | 14 | Lanis | ChatGPT | Generate a mock server to test the client | Temporary mock server (HELLO, LIST, GET, BYE); not submitted | Replaced by Tyler's real server | Client later passed all six client self-checks against the real server |
-
+| 15 | Tyler | Claude Code| In general would ask Claude Code for advice when I ran into road blocks or got confused, which sometimes would and sometimes wouldn't result in any code. | It is sadly, very ethical, and adamantly refused to help beyond a certain point | I would make changes or often review documentation based on its recommendation on where to look | I would verify correctness via documents and testing |
 ## 4. Where AI-produced material remains
 
 - `src/client.py`, `run(args)` (Lanis): AI provided a simplified example for the EOF check, including exception handling and behavior. This logic remains in my modified implementation. It also helped with error handling and improved my try/finally blocks.
